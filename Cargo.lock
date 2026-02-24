@@ -121,6 +121,7 @@ dependencies = [
 [[package]]
 name = "crypto-rs"
 version = "0.1.0"
+source = "git+https://github.com/BEULAHEVANJALIN/crypto-rs?rev=b0cc48eb5f588370b6ad89b556cff583bbe39ddd#b0cc48eb5f588370b6ad89b556cff583bbe39ddd"
 dependencies = [
  "csv",
  "hex",
@@ -334,6 +335,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "nested-musig2"
 version = "0.1.0"
+source = "git+https://github.com/BEULAHEVANJALIN/nested-musig2.git?rev=df665737b2f23175420478c4216b2f8673d31875#df665737b2f23175420478c4216b2f8673d31875"
 dependencies = [
  "crypto-rs",
  "num-bigint",
