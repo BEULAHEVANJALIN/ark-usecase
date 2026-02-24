@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 proptest = "1.10.0"
+nested-musig2 = { path = "../nested-musig2" }
+crypto-rs = { path = "../crypto-rs" }
+colored = "3.1.1"

@@ -4,6 +4,7 @@ pub enum BinTree<T> {
     Node {
         left: Box<BinTree<T>>,
         right: Box<Option<BinTree<T>>>,
+        value: T,
     },
 }
 
@@ -12,10 +13,22 @@ impl<T: Clone> BinTree<T> {
         Self::Leaf(value)
     }
 
-    pub fn node(left: Self, right: Option<Self>) -> Self {
+    pub fn node(left: Self, right: Option<Self>, value: T) -> Self {
         Self::Node {
             left: Box::new(left),
             right: Box::new(right),
+            value,
+        }
+    }
+
+    pub fn value(&self) -> &T {
+        match self {
+            BinTree::Leaf(value) => value,
+            BinTree::Node {
+                left: _,
+                right: _,
+                value,
+            } => value,
         }
     }
 
@@ -30,7 +43,11 @@ impl<T: Clone> BinTree<T> {
     pub fn height(&self) -> usize {
         match self {
             Self::Leaf(_) => 1,
-            Self::Node { left, right } => {
+            Self::Node {
+                left,
+                right,
+                value: _,
+            } => {
                 1 + left.height().max(if let Some(node) = (**right).clone() {
                     node.height()
                 } else {
@@ -43,7 +60,11 @@ impl<T: Clone> BinTree<T> {
     pub fn leaf_count(&self) -> usize {
         match self {
             Self::Leaf(_) => 1,
-            Self::Node { left, right } => {
+            Self::Node {
+                left,
+                right,
+                value: _,
+            } => {
                 left.leaf_count()
                     + if let Some(node) = (**right).clone() {
                         node.leaf_count()
@@ -54,13 +75,13 @@ impl<T: Clone> BinTree<T> {
         }
     }
 
-    pub fn from_vec(leaves: Vec<T>) -> Self {
+    pub fn from_vec(leaves: Vec<T>, agg: fn(T, T) -> T) -> Self {
         assert!(!leaves.is_empty(), "cannot build tree from empty vec");
         let nodes: Vec<BinTree<T>> = leaves.into_iter().map(|x| Self::leaf(x)).collect();
-        Self::build_tree(nodes)
+        Self::build_tree(nodes, agg)
     }
 
-    fn build_tree(nodes: Vec<BinTree<T>>) -> Self {
+    fn build_tree(nodes: Vec<BinTree<T>>, agg: fn(T, T) -> T) -> Self {
         assert!(!nodes.is_empty(), "cannot build tree from empty vec");
         if nodes.len() == 1 {
             nodes[0].clone()
@@ -70,14 +91,16 @@ impl<T: Clone> BinTree<T> {
 
             for i in (0..n).step_by(2) {
                 let left = nodes[i].clone();
+                let mut value = left.value().clone();
                 let right = if i + 1 < n {
+                    value = agg(value, nodes[i + 1].value().clone());
                     Some(nodes[i + 1].clone())
                 } else {
                     None
                 };
-                _nodes.push(Self::node(left, right));
+                _nodes.push(Self::node(left, right, value));
             }
-            Self::build_tree(_nodes)
+            Self::build_tree(_nodes, agg)
         }
     }
 }
@@ -87,11 +110,19 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    fn add(x: u32, y: u32) -> u32 {
+        x.saturating_add(y)
+    }
+
     // Collect leaf values left-to-right (preorder-ish but stable for comparing multisets)
     fn collect_leaves<T: Copy>(t: &BinTree<T>, out: &mut Vec<T>) {
         match t {
             BinTree::Leaf(v) => out.push(*v),
-            BinTree::Node { left, right } => {
+            BinTree::Node {
+                left,
+                right,
+                value: _,
+            } => {
                 collect_leaves(left, out);
                 if let Some(node) = (**right).clone() {
                     collect_leaves(&node, out);
@@ -107,12 +138,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot build tree from empty vec")]
     fn from_vec_panics_on_empty() {
-        let _t: BinTree<u32> = BinTree::from_vec(vec![]);
+        let _t: BinTree<u32> = BinTree::from_vec(vec![], add);
     }
 
     #[test]
     fn from_vec_single_leaf_is_leaf() {
-        let t = BinTree::from_vec(vec![42u32]);
+        let t = BinTree::from_vec(vec![42u32], add);
         match t {
             BinTree::Leaf(v) => assert_eq!(v, 42),
             BinTree::Node { .. } => panic!("expected Leaf"),
@@ -123,14 +154,14 @@ mod tests {
 
     #[test]
     fn from_vec_leaf_count_matches_input_len_small() {
-        let t = BinTree::from_vec(vec![1u32, 2, 3, 4, 5]);
+        let t = BinTree::from_vec(vec![1u32, 2, 3, 4, 5], add);
         assert_eq!(t.leaf_count(), 5);
     }
 
     #[test]
     fn from_vec_preserves_leaf_multiset_small() {
         let input = vec![5u32, 1, 5, 9, 1, 2];
-        let t = BinTree::from_vec(input.clone());
+        let t = BinTree::from_vec(input.clone(), add);
 
         let mut got = Vec::new();
         collect_leaves(&t, &mut got);
@@ -148,7 +179,7 @@ mod tests {
     fn from_vec_power_of_two_height_is_log2_plus_one() {
         for &n in &[1usize, 2, 4, 8, 16, 32] {
             let input: Vec<u32> = (0..n as u32).collect();
-            let t = BinTree::from_vec(input);
+            let t = BinTree::from_vec(input, add);
             let expected = n.trailing_zeros() as usize + 1;
             assert_eq!(t.height(), expected);
             assert_eq!(t.leaf_count(), n);
@@ -164,14 +195,14 @@ mod tests {
         #[test]
         fn prop_leaf_count_matches_len(xs in proptest::collection::vec(any::<u32>(), 1..512)) {
             let n = xs.len();
-            let t = BinTree::from_vec(xs);
+            let t = BinTree::from_vec(xs, add);
             prop_assert_eq!(t.leaf_count(), n);
         }
 
         // Property 2: leaf multiset is preserved (handles duplicates by sorting).
         #[test]
         fn prop_leaf_multiset_preserved(xs in proptest::collection::vec(any::<u32>(), 1..512)) {
-            let t = BinTree::from_vec(xs.clone());
+            let t = BinTree::from_vec(xs.clone(), add);
 
             let mut got = Vec::new();
             collect_leaves(&t, &mut got);
@@ -189,7 +220,7 @@ mod tests {
         #[test]
         fn prop_height_in_bounds(xs in proptest::collection::vec(any::<u32>(), 1..512)) {
             let n = xs.len();
-            let t = BinTree::from_vec(xs);
+            let t = BinTree::from_vec(xs, add);
             let h = t.height();
             prop_assert!(h >= 1);
             prop_assert!(h <= n);
@@ -201,7 +232,7 @@ mod tests {
         fn prop_power_of_two_height_exact(k in 0u8..10) {
             let n = 1usize << k; // 1..512
             let input: Vec<u32> = (0..n as u32).collect();
-            let t = BinTree::from_vec(input);
+            let t = BinTree::from_vec(input, add);
             let expected = k as usize + 1;
             prop_assert_eq!(t.height(), expected);
             prop_assert_eq!(t.leaf_count(), n);
