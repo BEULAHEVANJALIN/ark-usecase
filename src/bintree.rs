@@ -3,7 +3,7 @@ pub enum BinTree<T> {
     Leaf(T),
     Node {
         left: Box<BinTree<T>>,
-        right: Box<Option<BinTree<T>>>,
+        right: Box<BinTree<T>>,
         value: T,
     },
 }
@@ -13,7 +13,7 @@ impl<T: Clone> BinTree<T> {
         Self::Leaf(value)
     }
 
-    pub fn node(left: Self, right: Option<Self>, value: T) -> Self {
+    pub fn node(left: Self, right: Self, value: T) -> Self {
         Self::Node {
             left: Box::new(left),
             right: Box::new(right),
@@ -48,11 +48,7 @@ impl<T: Clone> BinTree<T> {
                 right,
                 value: _,
             } => {
-                1 + left.height().max(if let Some(node) = (**right).clone() {
-                    node.height()
-                } else {
-                    0
-                })
+                1 + left.height().max(right.height())
             }
         }
     }
@@ -66,11 +62,7 @@ impl<T: Clone> BinTree<T> {
                 value: _,
             } => {
                 left.leaf_count()
-                    + if let Some(node) = (**right).clone() {
-                        node.leaf_count()
-                    } else {
-                        0
-                    }
+                    + right.leaf_count()
             }
         }
     }
@@ -92,13 +84,12 @@ impl<T: Clone> BinTree<T> {
             for i in (0..n).step_by(2) {
                 let left = nodes[i].clone();
                 let mut value = left.value().clone();
-                let right = if i + 1 < n {
+                if i + 1 < n {
                     value = agg(value, nodes[i + 1].value().clone());
-                    Some(nodes[i + 1].clone())
+                    _nodes.push(Self::node(left, nodes[i+1].clone(), value));
                 } else {
-                    None
+                    _nodes.push(left);
                 };
-                _nodes.push(Self::node(left, right, value));
             }
             Self::build_tree(_nodes, agg)
         }
@@ -124,9 +115,7 @@ mod tests {
                 value: _,
             } => {
                 collect_leaves(left, out);
-                if let Some(node) = (**right).clone() {
-                    collect_leaves(&node, out);
-                }
+                collect_leaves(right, out);
             }
         }
     }

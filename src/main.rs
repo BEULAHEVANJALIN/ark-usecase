@@ -27,12 +27,11 @@ fn round1(node: &BinTree<Secp256k1Point>, state_map: &mut HashMap<Secp256k1Point
         },
         BinTree::Node { left, right, value } => {
             round1(left, state_map);
-            let mut out_internal = state_map.get(left.value()).unwrap().out.clone().unwrap();
-            if let Some(node) = right.as_ref().as_ref() {
-                round1(node, state_map);
-                let right_out = state_map.get(node.value()).unwrap().out.clone().unwrap();
-                out_internal = sign_agg(&[out_internal, right_out]).unwrap();
-            }
+            round1(right, state_map);
+            let left_out = state_map.get(left.value()).unwrap().out.clone().unwrap();
+            let right_out = state_map.get(right.value()).unwrap().out.clone().unwrap();
+            let out_internal = sign_agg(&[left_out, right_out]).unwrap();
+
             let out = sign_agg_ext(&Params::default(), &out_internal, value).unwrap();
             let state = NodeState {
                 secret_key: None,
@@ -64,32 +63,27 @@ fn round2(node: &BinTree<Secp256k1Point>, state_map: &mut HashMap<Secp256k1Point
 
             let mut ext_outs = outs_by_depth.to_vec();
             ext_outs.push(out_d);
-            if let Some(r_node) = right.as_ref().as_ref() {
 
-                // insert corresponding pubkeys of siblings at level `lambda`
-                let mut l_path = merkle_path.clone();
-                let mut r_path = merkle_path.clone();
-                r_path.push(vec![left.value().clone()]);
-                l_path.push(vec![r_node.value().clone()]);
-                round2(left, state_map, msg, &ext_outs, l_path);
-                round2(r_node, state_map, msg, &ext_outs, r_path);
+            // insert corresponding pubkeys of siblings at level `lambda`
+            let mut l_path = merkle_path.clone();
+            let mut r_path = merkle_path.clone();
+            r_path.push(vec![left.value().clone()]);
+            l_path.push(vec![right.value().clone()]);
+            round2(left, state_map, msg, &ext_outs, l_path);
+            round2(right, state_map, msg, &ext_outs, r_path);
 
-                let l_state = state_map.get(left.value()).unwrap().state_prime.clone().unwrap();
-                let l_out = state_map.get(left.value()).unwrap().out_prime.clone().unwrap();
+            let l_state = state_map.get(left.value()).unwrap().state_prime.clone().unwrap();
+            let l_out = state_map.get(left.value()).unwrap().out_prime.clone().unwrap();
 
-                let r_state = state_map.get(r_node.value()).unwrap().state_prime.clone().unwrap();
-                let r_out = state_map.get(r_node.value()).unwrap().out_prime.clone().unwrap();
+            let r_state = state_map.get(right.value()).unwrap().state_prime.clone().unwrap();
+            let r_out = state_map.get(right.value()).unwrap().out_prime.clone().unwrap();
 
-                let parts = &[(l_state, l_out), (r_state, r_out)];
-                let (state_prime, out_prime) = sign_agg_prime(parts).unwrap();
+            let parts = &[(l_state, l_out), (r_state, r_out)];
+            let (state_prime, out_prime) = sign_agg_prime(parts).unwrap();
 
-                let state = state_map.get_mut(value).unwrap(); 
-                state.out_prime = Some(out_prime);
-                state.state_prime = Some(state_prime);
-            } else {
-                // FIXME
-                panic!("Should not reach here");
-            }
+            let state = state_map.get_mut(value).unwrap(); 
+            state.out_prime = Some(out_prime);
+            state.state_prime = Some(state_prime);
         },
     }
 }
